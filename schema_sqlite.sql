@@ -1,3 +1,4 @@
+PRAGMA foreign_keys = ON;
 -- =============================================
 -- Multi-Strategy Quantitative Backtesting System
 -- SQLite Schema
@@ -77,7 +78,7 @@ CREATE TABLE IF NOT EXISTS Daily_Results (
     result_id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id INTEGER NOT NULL REFERENCES Backtest_Runs(run_id) ON DELETE CASCADE,
     trade_date TEXT NOT NULL,
-    signal TEXT,
+    signal TEXT CHECK (signal IN ('BUY', 'SELL', 'HOLD')),
     daily_return REAL,
     cumulative_return REAL,
     position_size REAL,

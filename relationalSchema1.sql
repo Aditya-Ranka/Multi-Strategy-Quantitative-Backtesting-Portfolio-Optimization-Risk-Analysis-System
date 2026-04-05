@@ -175,7 +175,7 @@ CREATE TABLE Daily_Results (
     result_id SERIAL PRIMARY KEY,
     run_id INT NOT NULL REFERENCES Backtest_Runs(run_id) ON DELETE CASCADE,
     trade_date DATE NOT NULL,
-    signal VARCHAR(10),              -- 'BUY', 'SELL', 'HOLD'
+    signal VARCHAR(10) CHECK (signal IN ('BUY', 'SELL', 'HOLD')),              -- 'BUY', 'SELL', 'HOLD'
     daily_return DECIMAL(18, 6),     -- Net return after transaction costs
     cumulative_return DECIMAL(18, 6),
     position_size DECIMAL(18, 6),
@@ -253,3 +253,27 @@ FROM Portfolio_Weights pw
 JOIN Strategies s ON pw.strategy_id = s.strategy_id
 JOIN Backtest_Runs br ON pw.run_id = br.run_id
 ORDER BY pw.run_id, pw.optimization_date, s.strategy_name;
+
+CREATE OR REPLACE FUNCTION sp_get_run_summary(p_run_id INT)
+RETURNS TABLE (
+    ticker_symbol VARCHAR(20),
+    start_date DATE,
+    end_date DATE,
+    sharpe_ratio DECIMAL(10, 6),
+    max_drawdown DECIMAL(10, 6),
+    total_return DECIMAL(18, 6)
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        b.ticker_symbol,
+        b.start_date,
+        b.end_date,
+        p.sharpe_ratio,
+        p.max_drawdown,
+        p.total_return
+    FROM Backtest_Runs b
+    JOIN Performance_Metrics p ON b.run_id = p.run_id
+    WHERE b.run_id = p_run_id;
+END;
+$$ LANGUAGE plpgsql;

@@ -8,6 +8,7 @@ from models.market_data import fetch_and_store
 
 def check_ticker_data(ticker):
     conn = sqlite3.connect('backtesting.db')
+    conn.execute("PRAGMA foreign_keys = ON")
     query = f"SELECT * FROM Market_Data WHERE ticker_symbol = '{ticker}' ORDER BY trade_date"
     df = pd.read_sql_query(query, conn)
     conn.close()

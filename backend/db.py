@@ -18,11 +18,23 @@ def get_db():
 
 
 def init_db():
-    """Initialize the database by executing the SQLite schema."""
+    """Initialize the database by executing the SQLite schema.
+    Drops the trigger and view first so the script is fully idempotent.
+    """
     conn = get_db()
-    with open(SCHEMA_PATH, "r") as f:
-        conn.executescript(f.read())
-    conn.close()
+    try:
+        with open(SCHEMA_PATH, "r") as f:
+            schema_script = f.read()
+        # Prepend DROP statements so CREATE TRIGGER / CREATE VIEW don't fail on re-runs.
+        # executescript() implicitly commits, so we bundle everything into one script.
+        idempotent_script = (
+            "DROP TRIGGER IF EXISTS trg_validate_portfolio_weights;\n"
+            "DROP VIEW IF EXISTS v_portfolio_allocation_history;\n"
+            + schema_script
+        )
+        conn.executescript(idempotent_script)
+    finally:
+        conn.close()
     print(f"Database initialized at {DB_PATH}")
 
 

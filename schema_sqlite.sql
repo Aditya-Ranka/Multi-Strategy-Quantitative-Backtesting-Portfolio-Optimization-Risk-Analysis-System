@@ -111,9 +111,33 @@ CREATE TABLE IF NOT EXISTS Portfolio_Weights (
     strategy_id INTEGER NOT NULL REFERENCES Strategies(strategy_id) ON DELETE CASCADE,
     allocation_weight REAL NOT NULL,
     optimization_date TEXT NOT NULL,
-    UNIQUE(run_id, strategy_id),
+    UNIQUE(run_id, strategy_id, optimization_date),
     CHECK (allocation_weight >= 0 AND allocation_weight <= 1)
 );
 
 CREATE INDEX IF NOT EXISTS idx_portfolio_weights_run ON Portfolio_Weights(run_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_weights_strategy ON Portfolio_Weights(strategy_id);
+
+-- Trigger to validate that portfolio weights for a given run and date do not exceed 1.0
+CREATE TRIGGER IF NOT EXISTS trg_validate_portfolio_weights
+AFTER INSERT ON Portfolio_Weights
+FOR EACH ROW
+WHEN (
+    (SELECT SUM(allocation_weight) FROM Portfolio_Weights
+     WHERE run_id = NEW.run_id AND optimization_date = NEW.optimization_date) > 1.0
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Portfolio weights for this run and date exceed 1.0');
+END;
+
+-- View: Portfolio allocation history
+CREATE VIEW IF NOT EXISTS v_portfolio_allocation_history AS
+SELECT
+    pw.run_id,
+    pw.optimization_date,
+    s.strategy_name,
+    pw.allocation_weight
+FROM Portfolio_Weights pw
+JOIN Strategies s ON pw.strategy_id = s.strategy_id
+JOIN Backtest_Runs br ON pw.run_id = br.run_id
+ORDER BY pw.run_id, pw.optimization_date, s.strategy_name;

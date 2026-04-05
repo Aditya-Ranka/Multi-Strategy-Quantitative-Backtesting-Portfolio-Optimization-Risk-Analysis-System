@@ -210,10 +210,46 @@ CREATE TABLE Portfolio_Weights (
     strategy_id INT NOT NULL REFERENCES Strategies(strategy_id) ON DELETE CASCADE,
     allocation_weight DECIMAL(10, 6) NOT NULL,
     optimization_date DATE NOT NULL,
-    UNIQUE(run_id, strategy_id),     -- One weight per strategy per run
+    UNIQUE(run_id, strategy_id, optimization_date),  -- One weight per strategy per run per date
     CHECK (allocation_weight >= 0 AND allocation_weight <= 1)
 );
 
 -- Indexes on FKs for faster JOINs
 CREATE INDEX idx_portfolio_weights_run ON Portfolio_Weights(run_id);
 CREATE INDEX idx_portfolio_weights_strategy ON Portfolio_Weights(strategy_id);
+
+-- Trigger to validate that portfolio weights for a given run and date do not exceed 1.0
+CREATE OR REPLACE FUNCTION fn_validate_portfolio_weights()
+RETURNS TRIGGER AS $$
+DECLARE
+    total_weight DECIMAL;
+BEGIN
+    SELECT SUM(allocation_weight) INTO total_weight
+    FROM Portfolio_Weights
+    WHERE run_id = NEW.run_id
+      AND optimization_date = NEW.optimization_date;
+
+    IF total_weight > 1.0 THEN
+        RAISE EXCEPTION 'Portfolio weights for this run and date exceed 1.0';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_validate_portfolio_weights
+AFTER INSERT OR UPDATE ON Portfolio_Weights
+FOR EACH ROW
+EXECUTE FUNCTION fn_validate_portfolio_weights();
+
+-- View: Portfolio allocation history
+CREATE VIEW v_portfolio_allocation_history AS
+SELECT
+    pw.run_id,
+    pw.optimization_date,
+    s.strategy_name,
+    pw.allocation_weight
+FROM Portfolio_Weights pw
+JOIN Strategies s ON pw.strategy_id = s.strategy_id
+JOIN Backtest_Runs br ON pw.run_id = br.run_id
+ORDER BY pw.run_id, pw.optimization_date, s.strategy_name;
